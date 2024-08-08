@@ -36,10 +36,15 @@ RUN make requirements
 # `pip3 install` tries to install into system path, which does not work as a
 # regular user. Build manually until then.
 RUN mkdir /tmp/pycortex_compile && cd /tmp/pycortex_compile && git clone --depth=1 --filter=blob:none -q https://github.com/gallantlab/pycortex.git && cd pycortex && pip3 install -r requirements.txt && python3 setup.py build && python3 setup.py install --prefix "$PYTHONUSERBASE" && cd "$HOME" && rm -r /tmp/pycortex_compile
-RUN mkdir -p $HOME/.config/pycortex
-RUN python3 -c "import cortex"
-COPY data/pycortex-options.cfg $HOME/.config/pycortex/options.cfg
 RUN pip3 install tornado==4.3
+
+# Link /usr/local/share/pycortex to the install location in the pip env so that volume mount location in docker-compose.yml don't depend on $PYTHONUSERBASE
+USER 0
+RUN rm -r $PYTHONUSERBASE/share/pycortex/db && mkdir -p /usr/local/share/pycortex && ln -s /usr/local/share/pycortex/db $PYTHONUSERBASE/share/pycortex/db
+
+RUN mkdir -p /root/.config/pycortex
+RUN python3 -c "import cortex"
+COPY data/pycortex-options.cfg /root/.config/pycortex/options.cfg
 
 EXPOSE 8050
 
