@@ -1317,6 +1317,24 @@ class PushToRedis(PreprocessingStep):
         r.lpush(self.key, pickle.dumps(data))
 
 
+class PushTupleToRedis(PreprocessingStep):
+    """Push a tuple to a redis key using lpush
+
+    Parameters
+    ----------
+    key : str
+    """
+    def __init__(self, key, *args, **kwargs):
+        parameters = {'key': key}
+        parameters.update(kwargs)
+        super(PushTupleToRedis, self).__init__(**parameters)
+        self.key = key
+
+    def run(self, *args):
+        # TODO: unclear if explicit `tuple()` is needed
+        r.lpush(self.key, pickle.dumps(tuple(args)))
+
+
 class Dictionary(PreprocessingStep):
     """A python-style dict as a preprocessing step
 
