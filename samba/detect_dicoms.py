@@ -45,7 +45,7 @@ def detect_dicoms(root_directory=None, extension='*'):
     """
     logger.info('Monitoring %s', root_directory)
 
-    monitor = MonitorSambaDirectory(root_directory, file_glob="*/*.dcm")
+    monitor = MonitorSambaDirectory(root_directory, file_glob="*/*" + extension)
 
     r = redis.StrictRedis('redis')
 
