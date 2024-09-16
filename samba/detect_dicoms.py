@@ -11,6 +11,7 @@ import time
 from typing import Dict
 from collections import defaultdict
 
+import pydicom
 import redis
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers.polling import PollingObserver as Observer
@@ -89,16 +90,14 @@ class MonitorDirectory(object):
         self.build()
 
     def build(self):
-        # was this file recently modified? if so, do NOT say this file is
-        # ready!
-        self.files_recently_modified = {}
-
         # TODO: rename event handler class
         class MyEventHandler(FileSystemEventHandler):
             def __init__(self, root_directory, file_glob, files_recently_modified):
                 self.root_directory = root_directory
                 self.file_glob = file_glob
-                #self.files_recently_modified = files_recently_modified
+
+                # was this file recently modified? if so, do NOT say this file is
+                # ready!
                 self.files_recently_modified = {}
 
             def on_any_event(self, event: FileSystemEvent) -> None:
@@ -108,7 +107,7 @@ class MonitorDirectory(object):
 
                 if event.event_type in ['modified', 'created']:
                     self.files_recently_modified[event.src_path] = True
-                    logger.info('file recently modified: ' + event.src_path)
+                    logger.debug('file recently modified: ' + event.src_path)
 
 
                 # TODO: filter for glob
@@ -141,8 +140,9 @@ class MonitorDirectory(object):
         eligible_new_files = {filename for filename in new_files if \
                               not (Path(filename).resolve() not in resolved_modified_paths)}
 
-        #eligible_new_files = {filename for filename in new_files if filename
-        #                      not in smb_open_files}
+        # Make sure all these files are actually DICOM files
+        eligible_new_files = set(filter(pydicom.misc.is_dicom, eligible_new_files))
+
         self.contents.difference_update(deleted_files)
         self.contents.update(eligible_new_files)
 
@@ -158,7 +158,7 @@ class MonitorDirectory(object):
                 logger.info(f"Adding {filename} at {time.time()}")
                 yield filename
 
-            time.sleep(.1) # this must be bigger than the PollingObserver's tick
+            time.sleep(.2) # this must be bigger than the PollingObserver's tick
 
 
 class MonitorSambaDirectory(object):
