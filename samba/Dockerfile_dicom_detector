@@ -2,9 +2,8 @@ FROM python:3.11-bullseye
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install samba -y
-RUN mkdir -p /usr/local/samba/var/
-ADD smb.conf /etc/samba/smb.conf
+RUN pip install redis watchdog
+RUN pip install pydicom
 
 RUN adduser --disabled-password --gecos "" rtfmri
 RUN mkdir /mnt/scanner
@@ -16,11 +15,9 @@ RUN chown -R rtfmri:rtfmri /logs
 #COPY inotifywait-polling.patch /inotifywait-polling.patch
 #RUN patch -p0 /inotifywait-polling.patch && rm /inotifywait-polling.patch
 
-EXPOSE 139
-EXPOSE 445
-
 WORKDIR /
-ADD run.sh run.sh
-RUN chmod u+x run.sh
+ADD run_dicom_detector.sh run_dicom_detector.sh
+RUN chmod u+x run_dicom_detector.sh
 
-CMD ["/run.sh"]
+ADD detect_dicoms.py detect_dicoms.py
+CMD ["/run_dicom_detector.sh"]

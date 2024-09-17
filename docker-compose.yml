@@ -52,5 +52,16 @@ services:
       - /etc/localtime:/etc/localtime
       - "${LOG_DIR}:/logs"
 
+  samba_dicom_detector:
+    build:
+      context: "./samba"
+      dockerfile: Dockerfile_dicom_detector
+    restart: always
+    volumes:
+      - ./samba/docker_cifs:/mnt/scanner
+      - /etc/timezone:/etc/timezone
+      - /etc/localtime:/etc/localtime
+      - "${LOG_DIR}:/logs"
+
 volumes:
   scanner:
