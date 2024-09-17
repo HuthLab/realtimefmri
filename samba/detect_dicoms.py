@@ -50,7 +50,7 @@ def detect_dicoms(root_directory=None, extension='*'):
     """
     logger.info('Monitoring %s', root_directory)
 
-    monitor = MonitorSambaDirectory(root_directory, file_glob="*/*" + extension)
+    #monitor = MonitorSambaDirectory(root_directory, file_glob="*/*" + extension)
     monitor = MonitorDirectory(root_directory, file_glob="*/*" + extension)
 
     r = redis.StrictRedis('redis')
@@ -58,12 +58,12 @@ def detect_dicoms(root_directory=None, extension='*'):
     for new_path in monitor.yield_new_paths():
         new_path = new_path.replace(root_directory, '', 1).lstrip('/')
         file_size_kib = os.path.getsize(root_directory + '/' + new_path) / (1<<10)
-        logger.info(f'SAMBA got a new volume {new_path} at time {time.time()} with size {file_size_kib:.3f} MB')
+        logger.info(f'SAMBA got a new volume {new_path} at time {time.time()} with size {file_size_kib:.3f} KiB')
         r.publish('volume', new_path)
 
 class MonitorDirectory(object):
     """
-    Monitor the file contents of a directory via continuous polling
+    Monitor the file contents of a directory via continuous polling. Generally prone to errors, so use MonitorSambaDirectory if possible (i.e. if we manage the Samba server).
 
     Parameters
     ----------
@@ -92,7 +92,7 @@ class MonitorDirectory(object):
     def build(self):
         # TODO: rename event handler class
         class MyEventHandler(FileSystemEventHandler):
-            def __init__(self, root_directory, file_glob, files_recently_modified):
+            def __init__(self, root_directory, file_glob):
                 self.root_directory = root_directory
                 self.file_glob = file_glob
 
@@ -107,18 +107,17 @@ class MonitorDirectory(object):
 
                 if event.event_type in ['modified', 'created']:
                     self.files_recently_modified[event.src_path] = True
-                    logger.debug('file recently modified: ' + event.src_path)
+                    logger.info('file recently modified: ' + event.src_path)
 
 
                 # TODO: filter for glob
-                logger.info(event)
+                logger.debug(event)
 
-        self.observer = Observer(timeout=0.1)
+        self.observer = Observer(timeout=0.15)
         #self.samba_status = SambaStatus(self.root_directory)
 
         self.event_handler = MyEventHandler(root_directory=self.root_directory,
-                                            file_glob=self.file_glob,
-                                            files_recently_modified = self.files_recently_modified)
+                                            file_glob=self.file_glob)
         self.observer.schedule(self.event_handler, self.root_directory, recursive=True)
         self.observer.start()
 
@@ -133,21 +132,28 @@ class MonitorDirectory(object):
         #smb_open_files = self.samba_status.get_open_files()
 
         resolved_modified_paths = {Path(path).resolve() for path, modified in self.event_handler.files_recently_modified.items() if modified}
+        #self.files_recently_modified.clear() # reset files modified since last tick
+        self.event_handler.files_recently_modified.clear() # reset list of files modified since last tick
+
         #logger.info('tick')
-        if len(self.files_recently_modified) > 0:
+        if len(self.event_handler.files_recently_modified) > 0:
             logger.info('recently modified files: ' + str(resolved_modified_paths))
 
         eligible_new_files = {filename for filename in new_files if \
                               not (Path(filename).resolve() not in resolved_modified_paths)}
 
-        # Make sure all these files are actually DICOM files
+        # Make sure all these files are actually DICOM files.
+        # Unfortunately this doesn't do much, since it seems to mainly check
+        # the header and not the body
         eligible_new_files = set(filter(pydicom.misc.is_dicom, eligible_new_files))
+
+        # Make sure they're bigger than ~1MB (VERY rough heuristic for
+        # integrity)
+        eligible_new_files = set(filter(lambda path: os.path.getsize(path) >= 900000,
+                                        eligible_new_files))
 
         self.contents.difference_update(deleted_files)
         self.contents.update(eligible_new_files)
-
-        #self.files_recently_modified.clear() # reset files modified since last tick
-        self.event_handler.files_recently_modified.clear() # reset list of files modified since last tick
 
         return eligible_new_files
 
@@ -158,7 +164,7 @@ class MonitorDirectory(object):
                 logger.info(f"Adding {filename} at {time.time()}")
                 yield filename
 
-            time.sleep(.2) # this must be bigger than the PollingObserver's tick
+            time.sleep(.3) # this must be bigger than the PollingObserver's tick
 
 
 class MonitorSambaDirectory(object):
