@@ -27,7 +27,7 @@ services:
       - "${STATIC_PATH}:/public/static"
       - /etc/timezone:/etc/timezone
       - /etc/localtime:/etc/localtime
-      - scanner:/usr/local/share/realtimefmri/scanner
+      - ./samba/docker_cifs:/usr/local/share/realtimefmri/scanner
       - .:/app/realtimefmri
 
   redis:
